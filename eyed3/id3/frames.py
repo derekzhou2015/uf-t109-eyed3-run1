@@ -1949,8 +1949,22 @@ def createFrame(tag_header, frame_header, data):
     if tag_header.version[:2] == ID3_V2_4 and tag_header.unsync:
         frame_header.unsync = True
 
-    frame = FrameClass(fid)
-    frame.parse(data, frame_header)
+    try:
+        frame = FrameClass(fid)
+        frame.parse(data, frame_header)
+    except FrameException:
+        # Already in the library's frame-level error taxonomy; FrameSet.parse
+        # skips these frames and carries on with the rest of the tag.
+        raise
+    except Exception as parse_ex:
+        # Corrupt frame data surfaces as a zoo of exception types
+        # (UnicodeDecodeError, zlib.error, ValueError, IndexError, ...).
+        # Normalize them all into FrameException so that one bad frame is
+        # skipped like any other frame-level error instead of aborting the
+        # parse of the whole tag (and with it the whole file).
+        raise FrameException(
+            f"Error parsing frame {fid!r}: "
+            f"{type(parse_ex).__name__}: {parse_ex}") from parse_ex
     return frame
 
 
